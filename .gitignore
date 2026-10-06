@@ -1,0 +1,8 @@
+.env
+data/chroma/
+data/bm25.pkl
+models/
+__pycache__/
+*.pyc
+.venv/
+.DS_Store

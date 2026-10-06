@@ -1,0 +1,8 @@
+.venv/
+.git/
+__pycache__/
+*.pyc
+data/chroma/
+data/bm25.pkl
+models/
+.env

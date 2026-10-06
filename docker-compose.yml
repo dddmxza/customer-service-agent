@@ -1,0 +1,16 @@
+services:
+  customer-service-agent:
+    build: .
+    container_name: cs-agent
+    ports:
+      - "8000:8000"
+    volumes:
+      # 挂载本地模型目录（只读即可）
+      - ./models:/app/models:ro
+      # 挂载 Chroma 向量数据库，保证数据持久化
+      - ./data/chroma:/app/data/chroma
+      # 挂载原始文档，方便查看
+      - ./data/raw:/app/data/raw:ro
+    env_file:
+      - .env
+    restart: unless-stopped

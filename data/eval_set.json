@@ -1,0 +1,77 @@
+[
+  {
+    "question": "退款要几天到账？",
+    "expected_source": "refund_policy.md",
+    "expected_keyword": "退款到账时间"
+  },
+  {
+    "question": "新疆包邮吗？",
+    "expected_source": "shipping_policy.md",
+    "expected_keyword": "包邮规则"
+  },
+  {
+    "question": "黄金会员打几折？",
+    "expected_source": "membership_policy.md",
+    "expected_keyword": "折扣权益"
+  },
+  {
+    "question": "普通用户有折扣吗？",
+    "expected_source": "membership_policy.md",
+    "expected_keyword": "折扣权益"
+  },
+  {
+    "question": "钻石会员有什么特殊权益？",
+    "expected_source": "membership_policy.md",
+    "expected_keyword": "折扣权益"
+  },
+  {
+    "question": "银行卡退款要多久？",
+    "expected_source": "refund_policy.md",
+    "expected_keyword": "退款到账时间"
+  },
+  {
+    "question": "哪些商品不能退款？",
+    "expected_source": "refund_policy.md",
+    "expected_keyword": "不支持退款"
+  },
+  {
+    "question": "顺丰加急多久能到？",
+    "expected_source": "shipping_policy.md",
+    "expected_keyword": "配送时效"
+  },
+  {
+    "question": "订单满多少包邮？",
+    "expected_source": "shipping_policy.md",
+    "expected_keyword": "包邮规则"
+  },
+  {
+    "question": "会员等级有效期是多久？",
+    "expected_source": "membership_policy.md",
+    "expected_keyword": "会员有效期"
+  },
+  {
+    "question": "退款流程是什么？",
+    "expected_source": "refund_policy.md",
+    "expected_keyword": "退款流程"
+  },
+  {
+    "question": "物流一直不动怎么办？",
+    "expected_source": "shipping_policy.md",
+    "expected_keyword": "物流查询"
+  },
+  {
+    "question": "发票怎么开？",
+    "expected_source": null,
+    "expected_keyword": null
+  },
+  {
+    "question": "你们支持货到付款吗？",
+    "expected_source": null,
+    "expected_keyword": null
+  },
+  {
+    "question": "怎么修改收货地址？",
+    "expected_source": null,
+    "expected_keyword": null
+  }
+]
