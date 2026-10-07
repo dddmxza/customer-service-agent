@@ -23,10 +23,3 @@ def search_dense(query: str, top_k: int = 10) -> List[Dict]:
         })
     return output
 
-
-if __name__ == "__main__":
-    for q in ["退款要几天到账？", "黄金会员打几折？"]:
-        print(f"\n{'='*60}\nQuery: {q}\n{'='*60}")
-        for i, r in enumerate(search_dense(q, top_k=3)):
-            print(f"\n--- Top {i+1} (source: {r['source']}, distance: {r['distance']:.4f}) ---")
-            print(r["content"])

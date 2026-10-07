@@ -56,19 +56,3 @@ def search_bm25(query: str, top_k: int = 10) -> List[Dict]:
         })
     return results
 
-
-if __name__ == "__main__":
-    queries = [
-        "退款要几天到账？",
-        "新疆包邮吗？",
-        "黄金会员打几折？",
-        "发票怎么开？",
-    ]
-    for q in queries:
-        print(f"\n{'='*60}")
-        print(f"Query: {q}")
-        print(f"{'='*60}")
-        results = search_bm25(q, top_k=3)
-        for i, r in enumerate(results):
-            print(f"\n--- Top {i+1} (source: {r['source']}, score: {r['score']:.4f}) ---")
-            print(r["content"])

@@ -38,20 +38,3 @@ def rerank(query: str, candidates: List[Dict], top_k: int = 3) -> List[Dict]:
         output.append(item)
     return output
 
-
-if __name__ == "__main__":
-    from app.retrieval.hybrid import search_hybrid
-
-    queries = [
-        "退款要几天到账？",
-        "新疆包邮吗？",
-        "黄金会员打几折？",
-        "发票怎么开？",
-    ]
-    for q in queries:
-        print(f"\n{'='*60}\nQuery: {q}\n{'='*60}")
-        candidates = search_hybrid(q, top_k=10)
-        results = rerank(q, candidates, top_k=3)
-        for i, r in enumerate(results):
-            print(f"\n--- Top {i+1} (source: {r['source']}, rerank: {r['rerank_score']:.4f}) ---")
-            print(r["content"])

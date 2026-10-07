@@ -39,14 +39,3 @@ def split_documents(docs: List[Dict]) -> List[Dict]:
                 })
     return chunks
 
-
-if __name__ == "__main__":
-    from app.knowledge.loader import load_documents
-
-    docs = load_documents()
-    chunks = split_documents(docs)
-    print(f"共 {len(chunks)} 个 chunk\n")
-    for c in chunks:
-        print(f"[{c['chunk_id']}] 来源: {c['source']}")
-        print(c["content"])
-        print("-" * 50)

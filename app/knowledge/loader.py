@@ -17,10 +17,3 @@ def load_documents() -> List[Dict]:
                 "path": str(path)
             })
     return docs
-
-
-if __name__ == "__main__":
-    docs = load_documents()
-    print(f"加载了 {len(docs)} 份文档")
-    for doc in docs:
-        print(f"  - {doc['source']} ({len(doc['content'])} 字)")

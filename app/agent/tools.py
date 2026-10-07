@@ -136,15 +136,3 @@ def execute_tool(name: str, arguments: str) -> str:
         return f"参数解析失败：{arguments}"
     return TOOL_MAP[name](**args)
 
-
-if __name__ == "__main__":
-    print("=== 测试工具 ===\n")
-    print(search_knowledge_base("退款要几天到账？"))
-    print()
-    print(query_order("12345"))
-    print()
-    print(apply_refund("12345"))
-    print()
-    print(transfer_to_human("用户投诉"))
-    print()
-    print("=== Schema 数量 ===", len(TOOLS_SCHEMA))

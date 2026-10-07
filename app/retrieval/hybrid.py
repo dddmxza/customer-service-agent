@@ -34,17 +34,3 @@ def search_hybrid(query: str, top_k: int = 5) -> List[Dict]:
     fused = rrf_fusion([dense_results, sparse_results])
     return fused[:top_k]
 
-
-if __name__ == "__main__":
-    queries = [
-        "退款要几天到账？",
-        "新疆包邮吗？",
-        "黄金会员打几折？",
-        "发票怎么开？",
-    ]
-    for q in queries:
-        print(f"\n{'='*60}\nQuery: {q}\n{'='*60}")
-        results = search_hybrid(q, top_k=3)
-        for i, r in enumerate(results):
-            print(f"\n--- Top {i+1} (source: {r['source']}, rrf: {r['rrf_score']:.5f}) ---")
-            print(r["content"])
