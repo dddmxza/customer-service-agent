@@ -4,8 +4,48 @@ from app.retrieval.service import retrieve
 from starlette.concurrency import run_in_threadpool
 
 # ============================================================
+# 知识库内容边界标记：用于把工具返回的资料与系统指令隔开
+# ============================================================
+
+KB_START = "【xzstart】"
+KB_END = "【xzend】"
+
+
+def _escape_kb(text: str) -> str:
+    """转义资料中出现的边界标记，防止其闭合信封、越出资料区。"""
+    text = text.replace(KB_START, "【xzstart·已转义】")
+    text = text.replace(KB_END, "【xzend·已转义】")
+    return text
+
+
+# ============================================================
 # 工具函数：真正干活的 Python 代码
 # ============================================================
+# ============================================================
+# 模拟订单数据：生产环境应替换为真实订单库查询
+# ============================================================
+
+MOCK_ORDERS = {
+    "12345": {
+        "owner": "user_a",
+        "desc": "订单 12345 已发货，承运商：顺丰，预计明天下午送达。",
+    },
+    "67890": {
+        "owner": "user_b",
+        "desc": "订单 67890 正在打包，预计 24 小时内发货。",
+    },
+    "11111": {
+        "owner": "user_a",
+        "desc": "订单 11111 已签收，签收时间：2026-10-03 14:22。",
+    },
+}
+def _owns_order(session_id: str, order_id: str) -> bool:
+    """判断订单是否属于当前会话。订单不存在时同样返回 False。"""
+    order = MOCK_ORDERS.get(order_id)
+    if order is None:
+        return False
+    return order["owner"] == session_id
+
 
 async def search_knowledge_base(query: str) -> str:
     """查询公司知识库，返回拼接好的文档内容。"""
@@ -14,18 +54,19 @@ async def search_knowledge_base(query: str) -> str:
         return "知识库中没有找到相关内容。"
     parts = []
     for i, r in enumerate(results):
-        parts.append(f"[{i+1}] {r['content']}\n（来源：{r['source']}）")
-    return "\n\n".join(parts)
+        content = _escape_kb(r["content"])
+        source = _escape_kb(r["source"])
+        parts.append(f"[{i+1}] {content}\n（来源：{source}）")
+    body = "\n\n".join(parts)
+    return f"{KB_START}\n{body}\n{KB_END}"
 
 
 async def query_order(order_id: str) -> str:
     """模拟查询订单物流状态。真实项目里应查数据库。"""
-    mock_orders = {
-        "12345": "订单 12345 已发货，承运商：顺丰，预计明天下午送达。",
-        "67890": "订单 67890 正在打包，预计 24 小时内发货。",
-        "11111": "订单 11111 已签收，签收时间：2026-10-03 14:22。",
-    }
-    return mock_orders.get(order_id, f"没有找到订单 {order_id}，请确认订单号是否正确。")
+    order = MOCK_ORDERS.get(order_id)
+    if order is None:
+        return f"没有找到订单 {order_id}，请确认订单号是否正确。"
+    return order["desc"]
 
 
 async def apply_refund(order_id: str) -> str:
@@ -126,7 +167,7 @@ TOOLS_SCHEMA = [
 ]
 
 
-async def execute_tool(name: str, arguments: str) -> str:
+async def execute_tool(name: str, arguments: str,session_id: str = "") -> str:
     """根据 LLM 的请求，执行对应的工具函数。"""
     if name not in TOOL_MAP:
         return f"未知工具：{name}"
@@ -134,5 +175,12 @@ async def execute_tool(name: str, arguments: str) -> str:
         args = json.loads(arguments)
     except json.JSONDecodeError:
         return f"参数解析失败：{arguments}"
+
+    # 权限检查：涉及具体订单的工具，必须确认订单归属
+    if name in ("query_order", "apply_refund"):
+        order_id = args.get("order_id")
+        if not isinstance(order_id, str) or not _owns_order(session_id, order_id):
+            return "无法处理该请求：订单号无效或不属于当前用户。"
+
     return await TOOL_MAP[name](**args)
 

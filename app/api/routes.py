@@ -73,7 +73,7 @@ async def chat(req: ChatRequest):
     reap_sessions()
     agent, lock = get_agent(req.session_id)
     async with lock:
-        reply = await agent.chat(req.message)
+        reply = await agent.chat(req.message,session_id=req.session_id)
 
     return ChatResponse(reply=reply, session_id=req.session_id)
 

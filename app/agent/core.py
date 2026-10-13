@@ -37,7 +37,7 @@ class CustomerServiceAgent:
     def _messages(self) -> List[Dict]:
         return [{"role": "system", "content": SYSTEM_PROMPT}] + self.history
 
-    async def chat(self, user_input: str, max_steps: int = 5) -> str:
+    async def chat(self, user_input: str,session_id: str = "", max_steps: int = 5) -> str:
         if self.history:
             rewritten = await rewrite_query(user_input, self.history)
             if rewritten != user_input:
@@ -71,7 +71,7 @@ class CustomerServiceAgent:
                 arguments = tool_call.function.arguments
                 print(f"  [tool] {name}({arguments})")
 
-                result = await execute_tool(name, arguments)
+                result = await execute_tool(name, arguments,session_id=session_id)
 
                 self.history.append({
                     "role": "tool",
