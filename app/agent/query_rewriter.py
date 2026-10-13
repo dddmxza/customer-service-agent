@@ -90,7 +90,9 @@ async def rewrite_query(question: str, history: List[Dict]) -> str:
     except Exception as e:
         print(f"  [rewrite] failed, fallback to original: {e}")
         return question
-
+    if not response.choices:
+        print("  [rewrite] empty choices, fallback to original")
+        return question
     rewritten = response.choices[0].message.content
     if rewritten:
         rewritten = rewritten.strip()
