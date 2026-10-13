@@ -2,6 +2,15 @@ from openai import OpenAI
 from typing import List, Dict
 from app.config import config
 
+_client = None
+def _get_client() -> OpenAI:
+    global _client
+    if _client is None:
+        _client = OpenAI(
+            api_key=config.DEEPSEEK_API_KEY,
+            base_url=config.DEEPSEEK_BASE_URL,
+        )
+    return _client
 
 REWRITE_PROMPT = """你是一个查询改写助手。根据对话历史，把用户最后一句话改写成
 一个完整、独立、不含指代词的问题。
@@ -67,19 +76,20 @@ def rewrite_query(question: str, history: List[Dict]) -> str:
     if not history_text.strip():
         return question
 
-    client = OpenAI(
-        api_key=config.DEEPSEEK_API_KEY,
-        base_url=config.DEEPSEEK_BASE_URL,
-    )
-
-    response = client.chat.completions.create(
-        model=config.DEEPSEEK_MODEL,
-        messages=[{
-            "role": "user",
-            "content": REWRITE_PROMPT.format(history=history_text, question=question)
-        }],
-        temperature=0,
-    )
+    try:
+        client = _get_client()
+        response = client.chat.completions.create(
+            model=config.DEEPSEEK_MODEL,
+            messages=[{
+                "role": "user",
+                "content": REWRITE_PROMPT.format(history=history_text, question=question)
+            }],
+            temperature=0,
+            timeout=15,
+        )
+    except Exception as e:
+        print(f"  [rewrite] failed, fallback to original: {e}")
+        return question
 
     rewritten = response.choices[0].message.content
     if rewritten:
