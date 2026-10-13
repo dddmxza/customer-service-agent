@@ -2,7 +2,7 @@ import chromadb
 from typing import List, Dict
 from app.config import config
 from app.knowledge.embedder import embed_texts
-
+from app.knowledge.guard import scan_dir
 
 _client = None
 _collection = None
@@ -37,6 +37,10 @@ def add_chunks(chunks: List[Dict]) -> None:
 if __name__ == "__main__":
     from app.knowledge.loader import load_documents
     from app.knowledge.splitter import split_documents
+
+    if not scan_dir(config.RAW_DIR, strict=True):
+        print("  [guard] 写入侧检查未通过，已中止建库。")
+        raise SystemExit(1)
 
     docs = load_documents()
     chunks = split_documents(docs)
