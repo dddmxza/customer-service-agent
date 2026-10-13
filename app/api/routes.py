@@ -44,6 +44,15 @@ def get_agent(session_id: str):
         return agent, lock
 
 
+async def close_all_agents() -> None:
+    """关闭所有活跃会话持有的客户端。服务退出时由 lifespan 调用。"""
+    with _sessions_lock:
+        agents = [agent for agent, _, _ in _sessions.values()]
+        _sessions.clear()
+    for agent in agents:
+        await agent.client.close()
+
+
 @router.get("/health", response_model=HealthResponse)
 def health():
     return HealthResponse(status="ok", message="service is running")

@@ -1,12 +1,24 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from pathlib import Path
-from app.api.routes import router
+from app.api.routes import router, close_all_agents
+from app.agent.query_rewriter import close_client
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    # ---- 关闭阶段：释放异步客户端 ----
+    await close_all_agents()
+    await close_client()
+
 
 app = FastAPI(
     title="Customer Service Agent",
     description="智能客服系统 + RAG 知识库",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.include_router(router)

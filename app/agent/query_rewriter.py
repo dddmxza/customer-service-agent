@@ -95,3 +95,10 @@ async def rewrite_query(question: str, history: List[Dict]) -> str:
     if rewritten:
         rewritten = rewritten.strip()
     return rewritten if rewritten else question
+
+async def close_client() -> None:
+    """关闭模块级客户端。服务退出时由 lifespan 调用。"""
+    global _client
+    if _client is not None:
+        await _client.close()
+        _client = None
