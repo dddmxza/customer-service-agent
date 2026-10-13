@@ -49,16 +49,34 @@ class CustomerServiceAgent:
         self.history.append({"role": "user", "content": user_content})
 
         for step in range(max_steps):
-            response = await self.client.chat.completions.create(
-                model=config.DEEPSEEK_MODEL,
-                messages=self._messages(),
-                tools=TOOLS_SCHEMA,
-                tool_choice="auto",
-                temperature=config.TEMPERATURE,
-            )
+            try:
+                response = await self.client.chat.completions.create(
+                    model=config.DEEPSEEK_MODEL,
+                    messages=self._messages(),
+                    tools=TOOLS_SCHEMA,
+                    tool_choice="auto",
+                    temperature=config.TEMPERATURE,
+                )
+            except Exception as e:
+                print(f"  [chat] llm call failed: {e}")
+                fallback = "抱歉，我暂时无法处理这个问题，已为您转接人工客服。"
+                self.history.append({"role": "assistant", "content": fallback})
+                return fallback
+
+            if not response.choices or response.choices[0] is None:
+                print("  [chat] empty choices, fallback")
+                fallback = "抱歉，我暂时无法处理这个问题，已为您转接人工客服。"
+                self.history.append({"role": "assistant", "content": fallback})
+                return fallback
 
             msg = response.choices[0].message
 
+            if msg is None:
+                print("  [chat] message is None, fallback")
+                fallback = "抱歉，我暂时无法处理这个问题，已为您转接人工客服。"
+                self.history.append({"role": "assistant", "content": fallback})
+                return fallback
+            
             if not msg.tool_calls:
                 reply = msg.content or ""
                 self.history.append({"role": "assistant", "content": reply})
