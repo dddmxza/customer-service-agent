@@ -4,6 +4,12 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
+# Windows 控制台默认 GBK，输出 ✅/❌/⚠️ 会抛 UnicodeEncodeError 并中断脚本。
+# 显式把 stdout 重配为 UTF-8；errors="replace" 保证即使终端不支持也不会崩。
+if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+
 from app.retrieval.service import retrieve
 
 
