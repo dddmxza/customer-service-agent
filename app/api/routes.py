@@ -43,12 +43,16 @@ def get_agent(session_id: str):
         return agent, lock
 
 
-async def reap_and_close() -> None:
-    """摘掉过期/超限会话，并关闭它们持有的客户端。"""
+def reap_sessions() -> None:
+    """摘掉过期/超限会话。
+
+    agent 不持有独占资源，摘下来交给 GC 即可；
+    共享客户端的关闭统一由 lifespan 的 close_client() 负责。
+    """
     with _sessions_lock:
         now = time.time()
-        dropped = _collect_expired(now)
-        dropped += _collect_lru_if_full()
+        _collect_expired(now)
+        _collect_lru_if_full()
 
 
 def close_all_agents() -> None:
@@ -66,7 +70,7 @@ def health():
 async def chat(req: ChatRequest):
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="message 不能为空")
-    await reap_and_close()
+    reap_sessions()
     agent, lock = get_agent(req.session_id)
     async with lock:
         reply = await agent.chat(req.message)
