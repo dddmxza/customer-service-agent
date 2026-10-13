@@ -1,5 +1,5 @@
 import json
-from openai import OpenAI
+from openai import AsyncOpenAI
 from typing import List, Dict
 from app.config import config
 from app.agent.prompt import SYSTEM_PROMPT
@@ -9,7 +9,7 @@ from app.agent.query_rewriter import rewrite_query
 
 class CustomerServiceAgent:
     def __init__(self):
-        self.client = OpenAI(
+        self.client = AsyncOpenAI(
             api_key=config.DEEPSEEK_API_KEY,
             base_url=config.DEEPSEEK_BASE_URL,
         )
@@ -18,9 +18,9 @@ class CustomerServiceAgent:
     def _messages(self) -> List[Dict]:
         return [{"role": "system", "content": SYSTEM_PROMPT}] + self.history
 
-    def chat(self, user_input: str, max_steps: int = 5) -> str:
+    async def chat(self, user_input: str, max_steps: int = 5) -> str:
         if self.history:
-            rewritten = rewrite_query(user_input, self.history)
+            rewritten = await rewrite_query(user_input, self.history)
             if rewritten != user_input:
                 print(f"  [rewrite] '{user_input}' -> '{rewritten}'")
             user_content = f"{user_input}\n[改写：{rewritten}]"
@@ -30,7 +30,7 @@ class CustomerServiceAgent:
         self.history.append({"role": "user", "content": user_content})
 
         for step in range(max_steps):
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model=config.DEEPSEEK_MODEL,
                 messages=self._messages(),
                 tools=TOOLS_SCHEMA,
@@ -52,7 +52,7 @@ class CustomerServiceAgent:
                 arguments = tool_call.function.arguments
                 print(f"  [tool] {name}({arguments})")
 
-                result = execute_tool(name, arguments)
+                result = await execute_tool(name, arguments)
 
                 self.history.append({
                     "role": "tool",
@@ -68,7 +68,7 @@ class CustomerServiceAgent:
         self.history = []
 
 
-if __name__ == "__main__":
+async def _main():
     agent = CustomerServiceAgent()
 
     conversation = [
@@ -82,5 +82,10 @@ if __name__ == "__main__":
         print(f"\n{'='*60}")
         print(f"用户：{q}")
         print(f"{'='*60}")
-        reply = agent.chat(q)
+        reply = await agent.chat(q)
         print(f"客服：{reply}\n")
+
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(_main())

@@ -1,12 +1,12 @@
-from openai import OpenAI
+from openai import AsyncOpenAI
 from typing import List, Dict
 from app.config import config
 
 _client = None
-def _get_client() -> OpenAI:
+def _get_client() -> AsyncOpenAI:
     global _client
     if _client is None:
-        _client = OpenAI(
+        _client = AsyncOpenAI(
             api_key=config.DEEPSEEK_API_KEY,
             base_url=config.DEEPSEEK_BASE_URL,
         )
@@ -55,7 +55,7 @@ def _get_role(msg) -> str:
     return getattr(msg, "role", "")
 
 
-def rewrite_query(question: str, history: List[Dict]) -> str:
+async def rewrite_query(question: str, history: List[Dict]) -> str:
     if not history:
         return question
 
@@ -78,7 +78,7 @@ def rewrite_query(question: str, history: List[Dict]) -> str:
 
     try:
         client = _get_client()
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=config.DEEPSEEK_MODEL,
             messages=[{
                 "role": "user",

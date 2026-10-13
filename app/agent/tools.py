@@ -1,15 +1,15 @@
 import json
 from typing import Dict, List
 from app.retrieval.service import retrieve
-
+from starlette.concurrency import run_in_threadpool
 
 # ============================================================
 # 工具函数：真正干活的 Python 代码
 # ============================================================
 
-def search_knowledge_base(query: str) -> str:
+async def search_knowledge_base(query: str) -> str:
     """查询公司知识库，返回拼接好的文档内容。"""
-    results = retrieve(query, top_k=3)
+    results = await run_in_threadpool(retrieve, query, top_k=3)
     if not results:
         return "知识库中没有找到相关内容。"
     parts = []
@@ -18,7 +18,7 @@ def search_knowledge_base(query: str) -> str:
     return "\n\n".join(parts)
 
 
-def query_order(order_id: str) -> str:
+async def query_order(order_id: str) -> str:
     """模拟查询订单物流状态。真实项目里应查数据库。"""
     mock_orders = {
         "12345": "订单 12345 已发货，承运商：顺丰，预计明天下午送达。",
@@ -28,12 +28,12 @@ def query_order(order_id: str) -> str:
     return mock_orders.get(order_id, f"没有找到订单 {order_id}，请确认订单号是否正确。")
 
 
-def apply_refund(order_id: str) -> str:
+async def apply_refund(order_id: str) -> str:
     """模拟申请退款。真实项目里应调用订单系统接口。"""
     return f"订单 {order_id} 的退款申请已提交，我们会在 1 个工作日内审核，审核通过后按原支付方式退回。"
 
 
-def transfer_to_human(reason: str) -> str:
+async def transfer_to_human(reason: str) -> str:
     """模拟转接人工客服。真实项目里应触发工单或消息队列。"""
     return f"已为您转接人工客服。转接原因：{reason}。请稍候，人工客服会尽快接入。"
 
@@ -126,7 +126,7 @@ TOOLS_SCHEMA = [
 ]
 
 
-def execute_tool(name: str, arguments: str) -> str:
+async def execute_tool(name: str, arguments: str) -> str:
     """根据 LLM 的请求，执行对应的工具函数。"""
     if name not in TOOL_MAP:
         return f"未知工具：{name}"
@@ -134,5 +134,5 @@ def execute_tool(name: str, arguments: str) -> str:
         args = json.loads(arguments)
     except json.JSONDecodeError:
         return f"参数解析失败：{arguments}"
-    return TOOL_MAP[name](**args)
+    return await TOOL_MAP[name](**args)
 
