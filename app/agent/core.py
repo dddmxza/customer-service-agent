@@ -6,13 +6,32 @@ from app.agent.prompt import SYSTEM_PROMPT
 from app.agent.tools import TOOLS_SCHEMA, execute_tool
 from app.agent.query_rewriter import rewrite_query
 
+# ---- 模块级共享客户端：所有 agent 共用一个，连接池全局复用 ----
+_client: AsyncOpenAI | None = None
 
-class CustomerServiceAgent:
-    def __init__(self):
-        self.client = AsyncOpenAI(
+
+def get_client() -> AsyncOpenAI:
+    """惰性单例。所有 agent 共享，不要由单个 agent 负责关闭。"""
+    global _client
+    if _client is None:
+        _client = AsyncOpenAI(
             api_key=config.DEEPSEEK_API_KEY,
             base_url=config.DEEPSEEK_BASE_URL,
         )
+    return _client
+
+
+async def close_client() -> None:
+    """关闭共享客户端。服务退出时由 lifespan 调用。"""
+    global _client
+    if _client is not None:
+        await _client.close()
+        _client = None
+
+
+class CustomerServiceAgent:
+    def __init__(self):
+        self.client = get_client()
         self.history: List[Dict] = []
 
     def _messages(self) -> List[Dict]:

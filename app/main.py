@@ -4,14 +4,14 @@ from fastapi.responses import FileResponse
 from pathlib import Path
 from app.api.routes import router, close_all_agents
 from app.agent.query_rewriter import close_client
-
-
+from app.agent.core import close_client as close_agent_client
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     yield
     # ---- 关闭阶段：释放异步客户端 ----
-    await close_all_agents()
-    await close_client()
+    close_all_agents()                # 清空会话表（同步）
+    await close_client()              # 改写层单例
+    await close_agent_client()        # 主对话层单例
 
 
 app = FastAPI(

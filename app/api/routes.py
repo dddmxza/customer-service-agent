@@ -16,26 +16,25 @@ _sessions = {}  # session_id -> (agent, last_active, lock)
 _sessions_lock = threading.Lock()
 
 
-def _evict_expired(now: float) -> None:
-    """清掉超过 TTL 未活动的会话。调用方需持有 _sessions_lock。"""
+def _collect_expired(now: float) -> list:
+    """摘掉过期会话，返回被摘掉的 agent。调用方需持有 _sessions_lock。"""
     expired = [sid for sid, (_, ts, _lk) in _sessions.items() if now - ts > SESSION_TTL]
-    for sid in expired:
-        _sessions.pop(sid, None)
+    return [_sessions.pop(sid)[0] for sid in expired]
 
 
-def _evict_lru_if_full() -> None:
-    """达到容量上限时，淘汰最久未使用的那个。调用方需持有 _sessions_lock。"""
-    if len(_sessions) >= MAX_SESSIONS:
-        oldest = min(_sessions.items(), key=lambda kv: kv[1][1])[0]
-        _sessions.pop(oldest, None)
+def _collect_lru_if_full() -> list:
+    """会话数达上限时摘掉最久未活动的一个，返回被摘掉的 agent。调用方需持有 _sessions_lock。"""
+    if len(_sessions) < MAX_SESSIONS:
+        return []
+    oldest = min(_sessions.items(), key=lambda kv: kv[1][1])[0]
+    return [_sessions.pop(oldest)[0]]
 
 
 def get_agent(session_id: str):
+    """纯查询 + 惰性创建。不负责清理。"""
     now = time.time()
     with _sessions_lock:
-        _evict_expired(now)
         if session_id not in _sessions:
-            _evict_lru_if_full()
             _sessions[session_id] = (CustomerServiceAgent(), now, asyncio.Lock())
         else:
             agent, _, lock = _sessions[session_id]
@@ -44,13 +43,21 @@ def get_agent(session_id: str):
         return agent, lock
 
 
-async def close_all_agents() -> None:
-    """关闭所有活跃会话持有的客户端。服务退出时由 lifespan 调用。"""
+async def reap_and_close() -> None:
+    """摘掉过期/超限会话，并关闭它们持有的客户端。"""
     with _sessions_lock:
-        agents = [agent for agent, _, _ in _sessions.values()]
+        now = time.time()
+        dropped = _collect_expired(now)
+        dropped += _collect_lru_if_full()
+    # ⚠️ 必须在锁外 await
+    for dead in dropped:
+        await dead.client.close()
+
+
+def close_all_agents() -> None:
+    """清空会话表。客户端由 close_client() 统一关闭，此处不负责。"""
+    with _sessions_lock:
         _sessions.clear()
-    for agent in agents:
-        await agent.client.close()
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -62,7 +69,7 @@ def health():
 async def chat(req: ChatRequest):
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="message 不能为空")
-
+    await reap_and_close()
     agent, lock = get_agent(req.session_id)
     async with lock:
         reply = await agent.chat(req.message)
