@@ -12,7 +12,7 @@
 - 用 **Agent** 让大模型自主决策调用工具，处理订单、退款、转人工等业务。
 - 用 **拒答机制** 保证知识库没有答案时，不乱回答，自动转人工。
 
-最终交付一个任何人都能一条命令跑起来的完整系统。
+最终交付一个可完整部署的系统：`git clone` 之后按下面的步骤走一遍（**关键是不能跳步**——两个模型和向量库都不在版本库里，必须自己下载和构建），就能得到一套能问能答、问不出会老实转人工的客服服务。
 
 ## 核心功能
 
@@ -25,7 +25,7 @@
 - **向量检索**：用 BAAI/bge-small-zh-v1.5 把问题和文档都转成向量，按语义相似度召回。
 - **BM25 检索**：用 jieba 分词 + rank-bm25 做关键词召回，精准匹配“新疆”“黄金会员”等术语。
 - **RRF 融合**：用倒数排名融合两条链的结果，互相纠错。
-- **Reranker 精排**：用 BAAI/bge-reranker-base 对候选文档重排，取最相关的 Top 3。
+- **Reranker 精排**：用 BAAI/bge-reranker-base 对候选文档重排，默认取最相关的 Top 5（`config.RERANK_TOP_K`）；Agent 工具路径固定取 Top 3。
 
 ### 2. 智能体（Agent）工具调用
 
@@ -50,7 +50,9 @@ Reranker 分数低于阈值时，系统不会强行回答，而是：
 
 - 每个用户通过 `session_id` 区分，对话历史独立存储。
 - 支持多轮上下文理解。
-- 服务重启后历史可继续（后续可扩展至 Redis 持久化）。
+- **会话有生命周期管理**：默认 30 分钟不活动即过期（`SESSION_TTL = 1800` 秒），超过 1000 个会话时按 LRU 淘汰（`MAX_SESSIONS = 1000`），避免长期运行的进程内存无限增长。
+- **同一会话的并发请求自动串行化**（每会话一把 `asyncio.Lock`），防止两个请求同时读写同一份历史导致上下文错乱；不同会话之间互不阻塞，可以真并行。
+- 会话存在**进程内字典**里，**服务重启即丢失**，多 worker（`uvicorn --workers N`，N>1）之间也不共享。要持久化需接入 Redis。
 
 ### 5. 查询改写（多轮对话）
 
@@ -65,28 +67,32 @@ Reranker 分数低于阈值时，系统不会强行回答，而是：
 - 独立模块，便于单独评估和降级。
 - 兼容 dict 和 OpenAI SDK 对象两种历史数据格式。
 - 首轮对话不触发改写，避免无谓开销。
+- **改写失败不影响主流程**：改写是可选增强，网络异常、超时、余额不足等任何失败都会**自动退化为「本轮不做改写」**，主对话照常继续，不会让整个 `/chat` 返回 500。改写请求带 15 秒超时。
 
 **已知局限**：当前 Prompt 覆盖了“指代补全”和“话题过渡”两类场景，但泛化能力有限。后续计划通过分类改写 + 独立评估集来提升通用性。
 
 ### 6. 全链路容器化部署
 
-一条命令启动完整服务：
+一条命令构建并启动完整服务：
 
 ```bash
 docker compose up --build
 ```
+
+镜像里只有代码和依赖，两个模型通过 Volume 在运行时挂载（见挑战 5）。
 
 ## 技术栈
 
 | 类别 | 选型 | 说明 |
 |---|---|---|
 | 语言 | Python 3.12 | AI 生态最稳定的版本 |
-| Web 框架 | FastAPI + Uvicorn | 高性能异步框架，自动生成 API 文档 |
+| Web 框架 | FastAPI + Uvicorn | 原生 `async`/`await`，自动生成 API 文档 |
 | 嵌入模型 | BAAI/bge-small-zh-v1.5 | 中文优化，轻量，本地部署 |
 | 重排模型 | BAAI/bge-reranker-base | Cross-Encoder，精排效果好 |
 | 向量数据库 | ChromaDB | 轻量、持久化、支持余弦相似度 |
 | 关键词检索 | rank-bm25 + jieba | 经典 BM25 算法，中文分词 |
 | 大模型 | DeepSeek (deepseek-flash) | 国内直连，OpenAI 兼容接口 |
+| 异步运行时 | asyncio + Starlette 线程池 | `/chat` 全链路异步；CPU 密集的检索用 `run_in_threadpool` 隔离 |
 | 容器化 | Docker + Docker Compose | 一键部署，环境隔离 |
 
 ## 系统架构
@@ -105,7 +111,7 @@ flowchart TB
     BM25 --> RRF
     RRF --> Rerank[Reranker 精排]
     Rerank --> Threshold{分数 ≥ 阈值?}
-    Threshold -->|是| Return[返回 Top 3 给 LLM]
+    Threshold -->|是| Return[返回 Top 结果给 LLM]
     Threshold -->|否| Reject[拒答 → 转人工]
 
     Retrieve -.-> Chroma[(ChromaDB 向量库)]
@@ -122,6 +128,8 @@ flowchart TB
 - **3 个知识库内没有答案的问题**：测试系统能否正确拒答，不编造。
 
 对每个问题取检索结果的 Top 3，检查是否命中预期来源和关键词。
+
+> 这个 Top 3 是**评估脚本自己的设定**（`scripts/evaluate.py`），与线上取值无关：线上 Agent 工具路径固定取 3（`app/agent/tools.py`），`config.RERANK_TOP_K` 现为 5 但在这条路径上不生效。
 
 ### 评估指标
 
@@ -205,9 +213,11 @@ volumes:
 ### 第一步：获取代码
 
 ```bash
-git clone https://github.com/你的用户名/customer-service-agent.git
+git clone https://github.com/dddmxza/customer-service-agent.git
 cd customer-service-agent
 ```
+
+> ⚠️ **`git clone` 拿到的是「不能直接跑」的副本**：`models/`（两个模型）和 `data/chroma/`（向量库）都在 `.gitignore` 里，不进版本库。所以后面还有第三步（备模型）和第六步（建向量库）必须走完。
 
 ### 第二步：配置 API Key
 
@@ -223,6 +233,8 @@ cp .env.example .env
 DEEPSEEK_API_KEY=sk-你的真实key
 ```
 
+> `.env.example` 里第 1 行的 `OPENAI_API_KEY` 是**注释掉的**，本项目的有效键名是 `DEEPSEEK_API_KEY`（对应 `app/config.py` 的读取逻辑）。
+
 ### 第三步：下载模型（首次运行）
 
 从魔搭社区下载两个模型到本地 `models/` 目录：
@@ -233,7 +245,35 @@ modelscope download --model BAAI/bge-small-zh-v1.5 --local_dir ./models/bge-smal
 modelscope download --model BAAI/bge-reranker-base --local_dir ./models/bge-reranker-base
 ```
 
-### 第四步：构建并启动服务
+> 代码按**本地目录**加载模型（`models/bge-small-zh-v1.5`、`models/bge-reranker-base`），**不会**联网按模型名拉取，所以这一步不能跳过。缺目录时会在 `app/knowledge/embedder.py` 抛 `FileNotFoundError`。
+
+### 第四步：准备知识文档
+
+`data/raw/` 下需要至少一篇 `.md` 或 `.txt` 知识文档。仓库自带 3 篇示例（`refund_policy.md`、`shipping_policy.md`、`membership_policy.md`），clone 下来就有，可以直接用；换成自己的文档也没问题。
+
+### 第五步：配置依赖版本（可选）
+
+`requirements.txt` 里 12 个直接依赖已全部钉死版本。如需在本机直接跑（不走 Docker）：
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate          # Windows
+pip install -r requirements.txt
+```
+
+> 本地 Windows 装 `torch` 与 Docker 不同：`.env` 之外不用管，`requirements.txt` 第一行的 `torch==2.9.0+cpu` 与 CPU 源是给 Linux 容器用的，本机按需自行安装即可。
+
+### 第六步：构建知识库（首次运行，**必做**）
+
+这一步把 `data/raw/` 的文档切分、向量化后写进 `data/chroma/`：
+
+```bash
+python -m app.knowledge.store
+```
+
+> ⚠️ **只在 `data/raw/` 有变化时才需要重跑**。写入用的是 `collection.add()`，`chunk_id` 为确定性的 `"{source}_{i}_{j}"`，对已存在的 id 重复 `add` 不是幂等 upsert，可能报错或产生重复数据。`data/chroma/` 一旦建好就不用再动。
+
+### 第七步：构建并启动服务
 
 ```bash
 docker compose up --build
@@ -241,7 +281,13 @@ docker compose up --build
 
 第一次构建约 5-15 分钟（需要下载依赖）。之后启动只需几秒。
 
-### 第五步：访问服务
+**本机直接跑（不走 Docker）**：
+
+```bash
+.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+### 第八步：访问服务
 
 打开浏览器：
 
@@ -263,6 +309,8 @@ docker compose down
 # 重新构建（代码改动后）
 docker compose up --build
 ```
+
+> ⚠️ **重启会丢掉所有会话**：对话历史存在进程内的 `_sessions` 字典里，`docker compose restart` / 重新 `up` / 容器重建都会清空，用户需要重新开始对话。要跨重启保留会话，需要把会话迁到 Redis（见末尾「后续优化方向」）。
 
 ## 项目结构
 
@@ -300,7 +348,7 @@ customer-service-agent/
 │
 ├── data/
 │   ├── raw/                         # 原始知识文档（Markdown）
-│   ├── chroma/                      # Chroma 向量库（自动生成）
+│   ├── chroma/                      # Chroma 向量库（自动生成，不入库，需自己建）
 │   └── eval_set.json                # 评估集（15 个问题）
 │
 ├── models/                          # 本地模型（Volume 挂载）
@@ -308,11 +356,10 @@ customer-service-agent/
 │   └── bge-reranker-base/
 │
 ├── scripts/
-│   ├── build_knowledge_base.py      # 一键建库
 │   └── evaluate.py                  # 评估脚本
 │
 ├── tests/
-│   └── test_retrieval.py            # 检索测试
+│   └── test_retrieval.py            # 检索测试（`__main__` 脚本，非 pytest）
 │
 ├── Dockerfile                       # 镜像构建
 ├── docker-compose.yml               # 容器编排

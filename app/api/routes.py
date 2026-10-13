@@ -49,9 +49,6 @@ async def reap_and_close() -> None:
         now = time.time()
         dropped = _collect_expired(now)
         dropped += _collect_lru_if_full()
-    # ⚠️ 必须在锁外 await
-    for dead in dropped:
-        await dead.client.close()
 
 
 def close_all_agents() -> None:
