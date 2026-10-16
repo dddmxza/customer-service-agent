@@ -2,178 +2,437 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>智能客服</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>智能客服 · 售后</title>
 <style>
+  /* ── 基础 ─────────────────────────────────────── */
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --ink:        #1c1c1e;   /* 正文 */
+    --ink-soft:   #5c5f66;   /* 次要文字 */
+    --ink-faint:  #8a8d94;   /* 提示文字 */
+    --line:       #e3e5e8;   /* 分隔线 */
+    --line-soft:  #eff0f2;
+    --surface:    #ffffff;
+    --canvas:     #f4f5f7;   /* 页面底 */
+    --bubble-ai:  #ffffff;
+    --accent:     #3d5a80;   /* 深石板蓝：稳、不促销、不科技感 */
+    --accent-dim: #32506f;
+    --danger:     #b3261e;
+    --danger-bg:  #fdf3f2;
+    --radius:     10px;
+    --maxw:       720px;
+  }
+  html, body { height: 100%; }
   body {
-    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
-    background: #f5f5f5;
-    height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: var(--canvas);
+    color: var(--ink);
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
     display: flex;
     justify-content: center;
-    align-items: center;
-  }
-  .chat-container {
-    width: 480px;
-    height: 640px;
-    background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-    display: flex;
-    flex-direction: column;
     overflow: hidden;
   }
-  .chat-header {
-    background: #4a6cf7;
-    color: #fff;
-    padding: 16px;
-    font-size: 16px;
-    font-weight: 600;
+
+  /* ── 主栏：窄屏铺满，宽屏收成可读宽度 ─────────────── */
+  .app {
+    width: 100%;
+    max-width: var(--maxw);
+    height: 100dvh;
+    background: var(--surface);
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
+    border-left: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+  }
+  @media (max-width: 760px) {
+    .app { border-left: none; border-right: none; }
+  }
+
+  /* ── 头部：降权，只做定位 ────────────────────────── */
+  .head {
+    flex: none;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
     align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: max(14px, env(safe-area-inset-top));
   }
-  .chat-header button {
-    background: rgba(255,255,255,0.2);
-    border: none;
-    color: #fff;
-    padding: 4px 10px;
-    border-radius: 6px;
+  .head-title { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+  .head-title span { font-weight: 400; color: var(--ink-faint); font-size: 13px; margin-left: 6px; }
+
+  .head button {
+    flex: none;
+    /* 触控区 ≥ 44px：padding 撑高，视觉上仍是小按钮 */
+    min-height: 44px;
+    padding: 0 14px;
+    margin: -8px -6px -8px 0;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--ink-soft);
+    font: inherit;
+    font-size: 13px;
     cursor: pointer;
-    font-size: 12px;
+    transition: background .12s, border-color .12s;
   }
-  .chat-messages {
+  .head button:hover { background: var(--line-soft); border-color: #d5d7db; }
+  .head button:active { background: #e8eaed; }
+
+  /* ── 消息区 ──────────────────────────────────────── */
+  .feed {
     flex: 1;
     overflow-y: auto;
-    padding: 16px;
-    background: #f9f9f9;
-  }
-  .msg {
-    margin-bottom: 12px;
+    overscroll-behavior: contain;
+    padding: 22px 20px 8px;
     display: flex;
+    flex-direction: column;
+    gap: 16px;
+    scroll-behavior: smooth;
   }
-  .msg.user { justify-content: flex-end; }
-  .msg.assistant { justify-content: flex-start; }
+
+  .row { display: flex; }
+  .row.user { justify-content: flex-end; }
+  .row.ai   { justify-content: flex-start; }
+
   .bubble {
-    max-width: 75%;
-    padding: 10px 14px;
-    border-radius: 12px;
-    font-size: 14px;
-    line-height: 1.6;
+    max-width: 82%;
+    padding: 11px 15px;
+    border-radius: var(--radius);
     white-space: pre-wrap;
     word-break: break-word;
+    font-size: 15px;
   }
-  .msg.user .bubble {
-    background: #4a6cf7;
+  /* 用户：实心，但不用 AI 蓝 */
+  .row.user .bubble {
+    background: var(--accent);
     color: #fff;
-    border-bottom-right-radius: 4px;
+    border-bottom-right-radius: 3px;
   }
-  .msg.assistant .bubble {
-    background: #fff;
-    color: #333;
-    border: 1px solid #e5e5e5;
-    border-bottom-left-radius: 4px;
+  /* 客服：白底细边，不用阴影 */
+  .row.ai .bubble {
+    background: var(--bubble-ai);
+    border: 1px solid var(--line);
+    border-bottom-left-radius: 3px;
   }
-  .chat-input {
+
+  /* ── 状态行：查资料 / 回复中 ─────────────────────── */
+  .status {
     display: flex;
-    padding: 12px;
-    border-top: 1px solid #eee;
-    background: #fff;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--ink-faint);
+    padding-left: 2px;
   }
-  .chat-input input {
-    flex: 1;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 10px 14px;
+  /* 状态靠位置与动效辨识，不用左侧色条 */
+  .status-text { padding-top: 1px; padding-bottom: 1px; }
+  .status-spin {
+    width: 14px; height: 14px; flex: none;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg) } }
+  .status-spin[hidden] { display: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .status-spin { animation: none; opacity: .45; }
+    .feed { scroll-behavior: auto; }
+  }
+
+  /* ── 错误：长得就不是正常回复 ────────────────────── */
+  .row.error .bubble {
+    background: var(--danger-bg);
+    border: 1px solid #f3c9c5;
+    color: #7a1c17;
+    border-bottom-left-radius: 3px;
+  }
+  .row.error .bubble strong {
+    display: block;
+    font-size: 13px;
+    color: var(--danger);
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+
+  /* ── 空状态：给四个能直接点的入口 ────────────────── */
+  .intro { padding: 4px 0 2px; }
+  .intro h1 {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    margin-bottom: 6px;
+  }
+  .intro p { color: var(--ink-soft); font-size: 14px; margin-bottom: 18px; }
+  .intro .hint {
+    font-size: 12px;
+    color: var(--ink-faint);
+    margin-bottom: 8px;
+    letter-spacing: .02em;
+  }
+  .chips { display: grid; gap: 8px; }
+  .chip {
+    width: 100%;
+    min-height: 48px;
+    padding: 11px 14px;
+    text-align: left;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    font: inherit;
     font-size: 14px;
-    outline: none;
+    color: var(--ink);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    transition: border-color .12s, background .12s;
   }
-  .chat-input input:focus { border-color: #4a6cf7; }
-  .chat-input button {
-    margin-left: 8px;
-    background: #4a6cf7;
+  .chip:hover { border-color: var(--accent); background: #fafbfc; }
+  .chip:active { background: var(--line-soft); }
+  .chip span { flex: 1; min-width: 0; }
+  .chip em {
+    font-style: normal; color: var(--ink-faint); font-size: 13px;
+    flex: none; white-space: nowrap;
+  }
+
+  /* ── 输入区 ──────────────────────────────────────── */
+  .compose {
+    flex: none;
+    padding: 12px 20px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+    background: var(--surface);
+  }
+  .compose-inner { display: flex; gap: 8px; align-items: flex-end; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+  }
+  .compose input {
+    flex: 1;
+    min-height: 46px;
+    border: 1px solid #d5d7db;
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    font: inherit;
+    font-size: 15px;
+    color: var(--ink);
+    background: var(--surface);
+    outline: none;
+    transition: border-color .12s, box-shadow .12s;
+  }
+  .compose input::placeholder { color: #a8abb1; }
+  .compose input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(61,90,128,.12);
+  }
+  .compose button {
+    flex: none;
+    min-height: 46px;
+    padding: 0 22px;
+    background: var(--accent);
     color: #fff;
     border: none;
-    border-radius: 8px;
-    padding: 10px 20px;
-    font-size: 14px;
+    border-radius: var(--radius);
+    font: inherit;
+    font-size: 15px;
+    font-weight: 500;
     cursor: pointer;
+    transition: background .12s;
   }
-  .chat-input button:disabled {
-    background: #aaa;
+  .compose button:hover:not(:disabled) { background: var(--accent-dim); }
+  .compose button:disabled {
+    background: #c9ccd1;
     cursor: not-allowed;
   }
-  .typing { color: #999; font-size: 13px; font-style: italic; }
-  .tool-status {
-    color: #7a7a7a;
+  .compose .foot {
     font-size: 12px;
-    font-style: italic;
-    border-left: 2px solid #d0d0d0;
-    padding-left: 8px;
+    color: var(--ink-faint);
+    margin-top: 8px;
+    text-align: center;
   }
+  @media (max-width: 400px) { .compose .foot { display: none; } }
 </style>
 </head>
 <body>
 
-<div class="chat-container">
-  <div class="chat-header">
-    <span>智能客服</span>
-    <button onclick="resetChat()">重新开始</button>
-  </div>
-  <div class="chat-messages" id="messages"></div>
-  <div class="chat-input">
-    <input id="input" type="text" placeholder="输入您的问题..." onkeydown="if(event.key==='Enter') send()">
-    <button id="sendBtn" onclick="send()">发送</button>
-  </div>
+<div class="app">
+  <header class="head">
+    <div class="head-title">售后助手<span>7×24 在线</span></div>
+    <button type="button" id="resetBtn">重新开始</button>
+  </header>
+
+  <main class="feed" id="messages" aria-live="polite"></main>
+
+  <form class="compose" onsubmit="event.preventDefault(); send();">
+    <label class="sr-only" for="input">描述您遇到的问题</label>
+    <div class="compose-inner">
+      <input id="input" type="text" autocomplete="off"
+             placeholder="例如：退款要几天到账？">
+      <button id="sendBtn" type="submit">发送</button>
+    </div>
+    <div class="foot">回答基于本店售后政策，涉及具体订单会为您转接人工</div>
+  </form>
 </div>
 
 <script>
-  const API = "http://localhost:8000";
+  // 同源部署；如需指向别的后端，在这里改
+  const API = "";
+
   let sessionId = "user_" + Math.random().toString(36).slice(2, 10);
   const messagesEl = document.getElementById("messages");
-  const inputEl = document.getElementById("input");
-  const sendBtn = document.getElementById("sendBtn");
+  const inputEl    = document.getElementById("input");
+  const sendBtn    = document.getElementById("sendBtn");
 
-  function addMessage(role, text) {
-    const div = document.createElement("div");
-    div.className = "msg " + role;
-    const bubble = document.createElement("div");
-    bubble.className = "bubble";
-    bubble.textContent = text;
-    div.appendChild(bubble);
-    messagesEl.appendChild(div);
+  // 空状态：把用户最可能问的四件事摆出来，点一下直接问
+  const QUICK = [
+    { q: "退款要几天到账？",       tag: "退款" },
+    { q: "退货运费谁承担？",       tag: "退货" },
+    { q: "发货要多久能到？",       tag: "物流" },
+    { q: "会员有什么权益？",       tag: "会员" }
+  ];
+
+  function atBottom() {
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
-   async function send() {
+  function el(tag, cls, text) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+
+  const SVG_NS = "http://www.w3.org/2000/svg";
+
+  function svg(tag, attrs) {
+    const n = document.createElementNS(SVG_NS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    return n;
+  }
+
+  // 一个 14px 的细圆环，缺口一角，用来表达"在转"
+  function spinIcon() {
+    const s = svg("svg", {
+      class: "status-spin", viewBox: "0 0 16 16",
+      fill: "none", "aria-hidden": "true"
+    });
+    s.appendChild(svg("circle", {
+      cx: 8, cy: 8, r: 6.5,
+      stroke: "currentColor", "stroke-width": 1.5, opacity: ".25"
+    }));
+    s.appendChild(svg("path", {
+      d: "M8 1.5 A6.5 6.5 0 0 1 14.5 8",
+      stroke: "currentColor", "stroke-width": 1.5, "stroke-linecap": "round"
+    }));
+    return s;
+  }
+
+  // 空状态
+  function showIntro() {
+    const box = el("div", "intro");
+    box.appendChild(el("h1", null, "有什么可以帮您？"));
+    box.appendChild(el("p", null, "描述您遇到的售后问题，我会给出处理方式和时间。"));
+    box.appendChild(el("div", "hint", "常见问题"));
+
+    const chips = el("div", "chips");
+    QUICK.forEach(function (item) {
+      const b = el("button", "chip");
+      b.type = "button";
+      b.appendChild(el("span", null, item.q));
+      b.appendChild(el("em", null, item.tag));
+      b.addEventListener("click", function () {
+        inputEl.value = item.q;
+        send();
+      });
+      chips.appendChild(b);
+    });
+    box.appendChild(chips);
+    messagesEl.appendChild(box);
+    atBottom();
+  }
+
+  function addMessage(role, text) {
+    const row = el("div", "row " + role);
+    row.appendChild(el("div", "bubble", text));
+    messagesEl.appendChild(row);
+    atBottom();
+  }
+
+  // 错误：独立样式，和正常回复明显不同
+  function addError(title, detail) {
+    const row = el("div", "row error");
+    const b = el("div", "bubble");
+    b.appendChild(el("strong", null, title));
+    b.appendChild(document.createTextNode(detail));
+    row.appendChild(b);
+    messagesEl.appendChild(row);
+    atBottom();
+  }
+
+  function statusRow(text) {
+    const row = el("div", "row ai");
+    const box = el("div", "status");
+    const icon = spinIcon();
+    const txt = el("span", "status-text", text);
+    box.appendChild(icon);
+    box.appendChild(txt);
+    row.appendChild(box);
+    messagesEl.appendChild(row);
+    atBottom();
+    return { row: row, txt: txt, icon: icon };
+  }
+
+  function setStatus(node, text, spinning) {
+    if (!node) return;
+    node.txt.textContent = text;
+    node.icon.hidden = !spinning;
+    atBottom();
+  }
+
+  function dropNode(node) {
+    if (node && node.row && node.row.parentNode) node.row.remove();
+  }
+
+  async function send() {
     const text = inputEl.value.trim();
-    if (!text) return;
+    if (!text || sendBtn.disabled) return;
+
+    // 首次发送时把空状态清掉
+    const intro = messagesEl.querySelector(".intro");
+    if (intro) intro.remove();
 
     addMessage("user", text);
     inputEl.value = "";
     sendBtn.disabled = true;
 
-    // 助手气泡先建出来占位，后面往里填字
+    // 助手气泡先占位，后面往里填字
     const wrap = document.createElement("div");
-    wrap.className = "msg assistant";
+    wrap.className = "row ai";
     const bubble = document.createElement("div");
     bubble.className = "bubble";
     bubble.textContent = "…";
     wrap.appendChild(bubble);
     messagesEl.appendChild(wrap);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
+    atBottom();
 
-    let acc = "";          // 累积正文
-    let toolBox = null;    // 当前工具状态行
-    let done = false;      // 是否收到了 done 事件
+    let acc = "";        // 累积正文
+    let statusNode = null;
+    let done = false;
 
     function setBubble(s) {
       bubble.textContent = s;
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+      atBottom();
     }
 
-    function dropToolBox() {
-      if (toolBox) { toolBox.remove(); toolBox = null; }
+    function clearStatus() {
+      dropNode(statusNode);
+      statusNode = null;
     }
 
     try {
@@ -183,11 +442,15 @@
         body: JSON.stringify({ message: text, session_id: sessionId })
       });
 
-      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      if (!resp.ok) {
+        const err = new Error("HTTP " + resp.status);
+        err.httpStatus = resp.status;
+        throw err;
+      }
 
-      const reader = resp.body.getReader();
+      const reader  = resp.body.getReader();
       const decoder = new TextDecoder();
-      let buf = "";        // 未处理完的字节
+      let buf = "";
 
       while (true) {
         const { done: streamDone, value } = await reader.read();
@@ -195,7 +458,7 @@
         // stream: true 保证多字节 UTF-8 字符跨 chunk 时不会被切坏
         buf += decoder.decode(value, { stream: true });
 
-        // SSE 以空行分帧。注意可能是 "\n\n"，也可能是 "\r\n\r\n"
+        // SSE 以空行分帧，可能是 "\n\n" 也可能是 "\r\n\r\n"
         let idx;
         while ((idx = buf.search(/\r?\n\r?\n/)) >= 0) {
           const frame = buf.slice(0, idx);
@@ -211,56 +474,73 @@
           }
 
           if (ev.type === "token") {
+            // 正文开始了，把工具状态收掉
+            if (!acc) {
+              if (statusNode) setStatus(statusNode, "正在回复", true);
+              else statusNode = statusRow("正在回复");
+            }
             acc += ev.text;
+            if (statusNode && acc.length > 0) clearStatus();
             setBubble(acc);
           } else if (ev.type === "tool_start") {
-            dropToolBox();
-            toolBox = document.createElement("div");
-            toolBox.className = "msg assistant";
-            const box = document.createElement("div");
-            box.className = "tool-status";
-            box.textContent = "正在查资料…";
-            toolBox.appendChild(box);
-            messagesEl.appendChild(toolBox);
-            messagesEl.scrollTop = messagesEl.scrollHeight;
+            clearStatus();
+            statusNode = statusRow("正在查资料");
           } else if (ev.type === "tool_end") {
-            if (toolBox) {
-              toolBox.firstChild.textContent =
-                "已查完（" + ev.ms + " ms）";
-            }
+            // 工具跑完不等于回答完了：模型可能接着调第二个工具。
+            // 状态行留在原地继续转，「正在回复」由 token 分支接手。
           } else if (ev.type === "error") {
-            dropToolBox();
-            acc = acc || "抱歉，服务暂时不可用。";
-            setBubble(acc);
+            clearStatus();
+            if (!acc) {
+              wrap.remove();
+              addError("服务暂时不可用", "请稍后重试。如果反复出现，可直接联系人工客服。");
+              done = true;
+            }
           } else if (ev.type === "done") {
             done = true;
           }
         }
       }
 
-      dropToolBox();
-      if (!acc) setBubble("（无回复）");
-    } catch (e) {
-      dropToolBox();
-      setBubble(acc || "网络错误，请稍后重试。");
-    } finally {
-      dropToolBox();
-      if (!done && acc) {
-        // 流断了但没收到 done：可以在这里做提示，本轮先不处理
+      clearStatus();
+      if (!acc) {
+        wrap.remove();
+        addError("没有收到回复", "请重新发送一次，或换个说法描述您的问题。");
       }
+    } catch (e) {
+      clearStatus();
+      if (!acc) {
+        wrap.remove();
+        // 服务端出错和网线掉了是两件事，排查方向不同，别混成一句
+        if (e && e.httpStatus >= 500) {
+          addError("服务暂时不可用", "后端出错了，请稍后重试。如果一直这样，可直接联系人工客服。");
+        } else if (e && e.httpStatus) {
+          addError("请求被拒绝", "HTTP " + e.httpStatus + "。请刷新页面后重试。");
+        } else {
+          addError("连接失败", "网络不通或服务没启动，请检查后再试一次。");
+        }
+      }
+    } finally {
+      clearStatus();
       sendBtn.disabled = false;
       inputEl.focus();
     }
   }
 
   async function resetChat() {
-    await fetch(API + "/reset/" + sessionId, { method: "POST" });
+    try {
+      await fetch(API + "/reset/" + sessionId, { method: "POST" });
+    } catch (e) {
+      // 清不掉后端会话也不该挡住用户重开
+    }
     messagesEl.innerHTML = "";
-    addMessage("assistant", "您好，我是智能客服小X，有什么可以帮您？");
+    showIntro();
+    inputEl.focus();
   }
 
-  // 首次进入时的欢迎语
-  addMessage("assistant", "您好，我是智能客服小X，有什么可以帮您？");
+  // 首次进入
+  document.getElementById("resetBtn").addEventListener("click", resetChat);
+  showIntro();
+  inputEl.focus();
 </script>
 
 </body>
