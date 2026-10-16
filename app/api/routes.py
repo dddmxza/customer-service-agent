@@ -2,8 +2,9 @@ import time
 import threading
 import asyncio
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from app.api.schemas import ChatRequest, ChatResponse, HealthResponse
-from app.agent.core import CustomerServiceAgent
+from app.agent.core import CustomerServiceAgent, _sse
 
 
 router = APIRouter()
@@ -76,6 +77,36 @@ async def chat(req: ChatRequest):
         reply = await agent.chat(req.message,session_id=req.session_id)
 
     return ChatResponse(reply=reply, session_id=req.session_id)
+
+
+@router.post("/chat/stream")
+async def chat_stream(req: ChatRequest):
+    """流式版对话。返回 SSE，逐条推送事件（见 schemas.StreamEvent）。
+
+    与 /chat 的关系：两条路由并存，共用同一份会话表与同一把会话锁。
+    """
+    if not req.message.strip():
+        raise HTTPException(status_code=400, detail="message 不能为空")
+    reap_sessions()
+    agent, lock = get_agent(req.session_id)
+
+    async def gen():
+        # 锁必须在生成器内部持有：放到外面会在返回 StreamingResponse
+        # 之前就释放，等于没有锁，两个请求会同时写 agent.history。
+        try:
+            async with lock:
+                async for event in agent.chat_stream(req.message, session_id=req.session_id):
+                    yield _sse(event)
+        except asyncio.CancelledError:
+            # 客户端断开。必须重新抛出：吞掉它会让 Starlette 收不到取消信号。
+            print(f"  [stream] 客户端断开 session={req.session_id!r}")
+            raise
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/reset/{session_id}")

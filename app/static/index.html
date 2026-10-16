@@ -104,6 +104,13 @@
     cursor: not-allowed;
   }
   .typing { color: #999; font-size: 13px; font-style: italic; }
+  .tool-status {
+    color: #7a7a7a;
+    font-size: 12px;
+    font-style: italic;
+    border-left: 2px solid #d0d0d0;
+    padding-left: 8px;
+  }
 </style>
 </head>
 <body>
@@ -138,7 +145,7 @@
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
-  async function send() {
+   async function send() {
     const text = inputEl.value.trim();
     if (!text) return;
 
@@ -146,25 +153,101 @@
     inputEl.value = "";
     sendBtn.disabled = true;
 
-    const typing = document.createElement("div");
-    typing.className = "msg assistant";
-    typing.innerHTML = '<div class="bubble typing">正在输入...</div>';
-    messagesEl.appendChild(typing);
+    // 助手气泡先建出来占位，后面往里填字
+    const wrap = document.createElement("div");
+    wrap.className = "msg assistant";
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.textContent = "…";
+    wrap.appendChild(bubble);
+    messagesEl.appendChild(wrap);
     messagesEl.scrollTop = messagesEl.scrollHeight;
 
+    let acc = "";          // 累积正文
+    let toolBox = null;    // 当前工具状态行
+    let done = false;      // 是否收到了 done 事件
+
+    function setBubble(s) {
+      bubble.textContent = s;
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function dropToolBox() {
+      if (toolBox) { toolBox.remove(); toolBox = null; }
+    }
+
     try {
-      const resp = await fetch(API + "/chat", {
+      const resp = await fetch(API + "/chat/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text, session_id: sessionId })
       });
-      const data = await resp.json();
-      typing.remove();
-      addMessage("assistant", data.reply);
+
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";        // 未处理完的字节
+
+      while (true) {
+        const { done: streamDone, value } = await reader.read();
+        if (streamDone) break;
+        // stream: true 保证多字节 UTF-8 字符跨 chunk 时不会被切坏
+        buf += decoder.decode(value, { stream: true });
+
+        // SSE 以空行分帧。注意可能是 "\n\n"，也可能是 "\r\n\r\n"
+        let idx;
+        while ((idx = buf.search(/\r?\n\r?\n/)) >= 0) {
+          const frame = buf.slice(0, idx);
+          buf = buf.slice(idx).replace(/^\r?\n\r?\n/, "");
+
+          if (!frame.startsWith("data: ")) continue;
+          let ev;
+          try {
+            ev = JSON.parse(frame.slice(6));
+          } catch (e) {
+            console.warn("坏帧，跳过：", frame);
+            continue;
+          }
+
+          if (ev.type === "token") {
+            acc += ev.text;
+            setBubble(acc);
+          } else if (ev.type === "tool_start") {
+            dropToolBox();
+            toolBox = document.createElement("div");
+            toolBox.className = "msg assistant";
+            const box = document.createElement("div");
+            box.className = "tool-status";
+            box.textContent = "正在查资料…";
+            toolBox.appendChild(box);
+            messagesEl.appendChild(toolBox);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+          } else if (ev.type === "tool_end") {
+            if (toolBox) {
+              toolBox.firstChild.textContent =
+                "已查完（" + ev.ms + " ms）";
+            }
+          } else if (ev.type === "error") {
+            dropToolBox();
+            acc = acc || "抱歉，服务暂时不可用。";
+            setBubble(acc);
+          } else if (ev.type === "done") {
+            done = true;
+          }
+        }
+      }
+
+      dropToolBox();
+      if (!acc) setBubble("（无回复）");
     } catch (e) {
-      typing.remove();
-      addMessage("assistant", "网络错误，请稍后重试。");
+      dropToolBox();
+      setBubble(acc || "网络错误，请稍后重试。");
     } finally {
+      dropToolBox();
+      if (!done && acc) {
+        // 流断了但没收到 done：可以在这里做提示，本轮先不处理
+      }
       sendBtn.disabled = false;
       inputEl.focus();
     }
